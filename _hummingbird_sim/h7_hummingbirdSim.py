@@ -18,12 +18,14 @@ animation = HummingbirdAnimation()
 
 t = P.t_start  # time starts at t_start
 y = hummingbird.h()
+u = np.zeros((2, 1))
+y_ref = np.zeros((3, 1))
 while t < P.t_end:  # main simulation loop
 
     # Propagate dynamics at rate Ts
     t_next_plot = t + P.t_plot
     while t < t_next_plot:
-        r = np.array([[theta_ref.square(t)], [0.]])
+        r = np.array([[theta_ref.square(t)], [0.0]])
         u, y_ref = controller.update(r, y)
         y = hummingbird.update(u)  # Propagate the dynamics
         t += P.Ts  # advance time by Ts
@@ -33,7 +35,7 @@ while t < P.t_end:  # main simulation loop
     dataPlot.update(t, hummingbird.state, u, y_ref)
 
     # the pause causes figure to be displayed during simulation
-    plt.pause(0.0001)
+    plt.pause(0.001)
 
 # Keeps the program from closing until the user presses a button.
 print('Press key to close')

@@ -1,110 +1,129 @@
 import numpy as np
-import control as cnt
 import hummingbirdParam as P
 
 
 class ctrlStateFeedbackIntegrator:
     def __init__(self):
-        #--------------------------------------------------
-        # State Feedback Control Design
-        #--------------------------------------------------
-        # tuning parameters
-        wn_th =        
-        zeta_th =   
-        pi_th =   
-        wn_psi =         
-        zeta_psi = 
-        wn_phi =         
-        zeta_phi =   
-        pi_psi =   
-        # hard code Ackerman's formula
-        alpha1_lon = 
-        alpha2_lon = 
-        alpha3_lon = 
-        self.k_th = 
-        self.k_thdot = 
-        self.ki_lon = 
-        alpha1_lat = 
-        alpha2_lat = 
-        alpha3_lat = 
-        alpha4_lat = 
-        alpha5_lat = 
-        b1 = 1/P.J1x
-        a1 = P.ellT*P.Fe/(P.JT+P.J1z)
-        self.k_phi = 
-        self.k_psi = 
-        self.k_phidot = 
-        self.k_psidot = 
-        self.ki_lat = 
-        # print gains to terminal
-        print('K_lon: [', self.k_th, ',', self.k_thdot, ']')
-        print('ki_lon: ', self.ki_lon)         
-        print('K_lat: [', self.k_phi, ',', self.k_psi, ',', self.k_phidot, ',', self.k_psidot, ']')
-        print('ki_lat: ', self.ki_lat)        
-        #--------------------------------------------------
-        # saturation limits
-        theta_max = 30.0 * np.pi / 180.0  # Max theta, rads
-        #--------------------------------------------------
+        # DC Gains
+        self.k_th    = 4.0842513
+        self.k_thdot = 0.59561998
+        self.ki_lon  = -9.076113997881688
+
+        # Lateral gains
+        self.k_phi     = 0.0489888
+        self.k_psi     = 0.10039459
+        self.k_phidot  = 0.0043848
+        self.k_psidot  = 0.03965126
+        self.ki_lat    = -0.09210513161845148
+
+
+        # dirty dreivative setup
         self.Ts = P.Ts
-        sigma = 0.05  # cutoff freq for dirty derivative
-        self.beta = (2 * sigma - self.Ts) / (2 * sigma + self.Ts)
-        self.phi_d1 = 0.
-        self.phi_dot = 0.
-        self.theta_d1 = 0.
-        self.theta_dot = 0.
-        self.psi_d1 = 0.
-        self.psi_dot = 0.        
-        # variables to implement integrator
-        self.integrator_th = 0.0  
-        self.error_th_d1 = 0.0  
-        self.integrator_psi = 0.0  
-        self.error_psi_d1 = 0.0 
+        sigma = 0.05
+        self.beta = (2.0 * sigma - self.Ts) / (2.0 * sigma + self.Ts)
+
+        # Previous samples
+        self.phi_d1   = 0.0
+        self.theta_d1 = 0.0
+        self.psi_d1   = 0.0
+
+        # Estimated derivatives
+        self.phi_dot   = 0.0
+        self.theta_dot = 0.0
+        self.psi_dot   = 0.0
+
+        # Integrators and error terms
+        self.integrator_th  = 0.0
+        self.error_th_d1    = 0.0
+
+        self.integrator_psi = 0.0
+        self.error_psi_d1   = 0.0
+
+        # constant distrubances
+        self.force_disturbance  = 0.0
+        self.torque_disturbance = 0.0
 
     def update(self, r: np.ndarray, y: np.ndarray):
-        theta_ref = r[0][0]
-        psi_ref = r[1][0]
-        phi = y[0][0]
-        theta = y[1][0]
-        psi = y[2][0]
-        force_equilibrium =     
-        # update differentiators
-        self.phi_dot = 
-        self.phi_d1 = 
-        self.theta_dot = 
-        self.theta_d1 = 
-        self.psi_dot =   
-        self.psi_d1 = 
-        # integrate error
-        error_th = theta_ref - theta
-        error_psi = psi_ref - psi
-        self.integrator_th = 
-        self.integrator_psi = 
-        self.error_th_d1 = error_th
+        # unpack reference and measurements
+        theta_ref = r[0, 0]
+        psi_ref   = r[1, 0]
+
+        phi   = y[0, 0]
+        theta = y[1, 0]
+        psi   = y[2, 0]
+
+        force_equilibrium = P.Fe
+
+        # Dirty derivatives
+        self.phi_dot = self.beta * self.phi_dot \
+            + (1.0 - self.beta) * (phi - self.phi_d1) / self.Ts
+        self.phi_d1 = phi
+
+        # theta_dot
+        self.theta_dot = self.beta * self.theta_dot \
+            + (1.0 - self.beta) * (theta - self.theta_d1) / self.Ts
+        self.theta_d1 = theta
+
+        # psi_dot
+        self.psi_dot = self.beta * self.psi_dot \
+            + (1.0 - self.beta) * (psi - self.psi_d1) / self.Ts
+        self.psi_d1 = psi
+
+        # integrators
+        error_th  = theta_ref - theta
+        error_psi = psi_ref   - psi
+
+        self.integrator_th  += (self.Ts / 2.0) * (error_th  + self.error_th_d1)
+        self.integrator_psi += (self.Ts / 2.0) * (error_psi + self.error_psi_d1)
+
+        self.error_th_d1  = error_th
         self.error_psi_d1 = error_psi
 
-        # longitudinal control
-        force_unsat = 
-        force = saturate(force_unsat, -P.force_max, P.force_max)
-        # lateral control
-        torque_unsat = 
-        torque = saturate(torque_unsat, -P.torque_max, P.torque_max)
-        # convert force and torque to pwm signals
-        pwm = np.array([[force + torque / P.d],               # u_left
-                      [force - torque / P.d]]) / (2 * P.km)   # r_right          
-        pwm = saturate(pwm, 0, 1)
-        return pwm, np.array([[0], [theta_ref], [psi_ref]])
+        # Longitudinal control (theta)
+        F_tilde = -(
+            self.k_th    * theta +
+            self.k_thdot * self.theta_dot +
+            self.ki_lon  * self.integrator_th
+        )
+
+        force_unsat = force_equilibrium + F_tilde + self.force_disturbance
+        force = saturate(force_unsat, 0.0, P.force_max)
+
+        # Lateral control (phi, psi)
+        tau_unsat = -(
+            self.k_phi    * phi +
+            self.k_psi    * psi +
+            self.k_phidot * self.phi_dot +
+            self.k_psidot * self.psi_dot +
+            self.ki_lat   * self.integrator_psi
+        ) + self.torque_disturbance
+
+        torque = saturate(tau_unsat, -P.torque_max, P.torque_max)
+
+        # Convert force and torque to PWM signals
+        pwm = np.array([
+            [force + torque / P.d],
+            [force - torque / P.d]
+        ]) / (2.0 * P.km)
+
+        pwm = saturate(pwm, 0.0, 1.0)
+
+        # Reference vector for plotting
+        y_ref = np.array([[0.0], [theta_ref], [psi_ref]])
+
+        return pwm, y_ref
 
 
 def saturate(u, low_limit, up_limit):
-    if isinstance(u, float) is True:
+    if isinstance(u, float) or isinstance(u, np.floating):
         if u > up_limit:
             u = up_limit
         if u < low_limit:
             u = low_limit
     else:
-        for i in range(0, u.shape[0]):
-            if u[i][0] > up_limit:
-                u[i][0] = up_limit
-            if u[i][0] < low_limit:
-                u[i][0] = low_limit
+        for i in range(u.shape[0]):
+            if u[i, 0] > up_limit:
+                u[i, 0] = up_limit
+            if u[i, 0] < low_limit:
+                u[i, 0] = low_limit
     return u

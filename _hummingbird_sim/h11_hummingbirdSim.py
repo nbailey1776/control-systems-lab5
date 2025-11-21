@@ -7,36 +7,43 @@ from dataPlotter import DataPlotter
 from hummingbirdDynamics import HummingbirdDynamics
 from ctrlStateFeedbackIntegrator import ctrlStateFeedbackIntegrator
 
-# instantiate pendulum, controller, and reference classes
-hummingbird = HummingbirdDynamics(alpha=0.1)
-controller = ctrlStateFeedbackIntegrator()
-psi_ref = SignalGenerator(amplitude=30.*np.pi/180., frequency=0.02)
-theta_ref = SignalGenerator(amplitude=15.*np.pi/180., frequency=0.05)
 
-# instantiate the simulation plots and animation
-dataPlot = DataPlotter()
-animation = HummingbirdAnimation()
+def main():
+    # Instantiate dynamics and controller
+    hummingbird = HummingbirdDynamics(alpha=0.1)
+    controller = ctrlStateFeedbackIntegrator()
 
-t = P.t_start  # time starts at t_start
-y = hummingbird.h()
-while t < P.t_end:  # main simulation loop
+    # Reference generators
+    psi_ref = SignalGenerator(amplitude=30.0 * np.pi / 180.0, frequency=0.02)
+    theta_ref = SignalGenerator(amplitude=15.0 * np.pi / 180.0, frequency=0.05)
 
-    # Propagate dynamics at rate Ts
-    t_next_plot = t + P.t_plot
-    while t < t_next_plot:
-        r = np.array([[theta_ref.square(t)], [psi_ref.square(t)]])
-        pwms, y_ref = controller.update(r, y)
-        y = hummingbird.update(pwms)  # Propagate the dynamics
-        t += P.Ts  # advance time by Ts
+    # Visualization
+    dataPlot = DataPlotter()
+    animation = HummingbirdAnimation()
 
-    # update animation and data plots at rate t_plot
-    animation.update(t, hummingbird.state)
-    dataPlot.update(t, hummingbird.state, pwms, y_ref)
+    t = P.t_start
+    y = hummingbird.h()
 
-    # the pause causes figure to be displayed during simulation
-    plt.pause(0.0001)
+    while t < P.t_end:
+        t_next_plot = t + P.t_plot
+        while t < t_next_plot:
+            r = np.array([
+                [theta_ref.square(t)],
+                [psi_ref.square(t)]
+            ])
 
-# Keeps the program from closing until the user presses a button.
-print('Press key to close')
-plt.waitforbuttonpress()
-plt.close()
+            pwm, y_ref = controller.update(r, y)
+            y = hummingbird.update(pwm)
+            t += P.Ts
+
+        animation.update(t, hummingbird.state)
+        dataPlot.update(t, hummingbird.state, pwm, y_ref)
+        plt.pause(0.01)
+
+    print("Press key to close")
+    plt.waitforbuttonpress()
+    plt.close()
+
+
+if __name__ == "__main__":
+    main()
